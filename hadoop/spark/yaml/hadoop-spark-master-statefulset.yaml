@@ -1,0 +1,121 @@
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  labels:
+    app: hadoop-master
+  name: hadoop-master
+  namespace: bigdata
+spec:
+  replicas: 1
+  serviceName: hadoop-master
+  selector:
+    matchLabels:
+      app: hadoop-master
+  template:
+    metadata:
+      name: hadoop-master
+      labels:
+        app: hadoop-master
+    spec:
+      nodeName: master
+      containers:
+      - name: hadoop-master
+        image: repository:5000/hadoop-sqoop-spark
+        imagePullPolicy: Always
+        command:
+        - bash
+        - "-c"
+        - |
+          cp /tmp/* /usr/local/hadoop/etc/hadoop/
+          sed -i "s/@HDFS_MASTER_SERVICE@/$HDFS_MASTER_SERVICE/g" /usr/local/hadoop/etc/hadoop/core-site.xml
+
+          echo "Start NameNode ..."
+          if [ ! -d "/root/hdfs/namenode/current/" ];then
+          hdfs namenode -format
+          fi
+          nohup hdfs namenode>$HADOOP_HOME/logs/hdfs.out 2>&1 &
+          echo "Start Hive ..."
+          #if [ ! -d "/root/hdfs/namenode/initSchema" ];then
+          #schematool -dbType mysql -initSchema
+          #echo 'true'>/root/hdfs/namenode/initSchema
+          #fi
+          echo "Start Spark ..."
+          cp /tmp/spark/* /usr/local/spark/conf
+          cp /usr/local/hive/conf/* /usr/local/spark/conf
+          cp /usr/local/hive/lib/mysql-connector-java-8.0.15.jar /usr/local/spark/jars
+          chmod +x /usr/local/spark/conf/spark-env.sh
+          bash /usr/local/spark/conf/spark-env.sh
+          bash /usr/local/spark/sbin/start-master.sh
+          echo "Start Sqoop ..."
+          cp /usr/local/hive/lib/mysql-connector-java-8.0.15.jar $SQOOP_HOME/lib
+          cp /usr/local/hive/lib/hive-exec-2.3.8.jar $SQOOP_HOME/lib
+
+          tail -f $HADOOP_HOME/logs/hdfs.out
+        env:
+        - name: HDFS_MASTER_SERVICE
+          valueFrom:
+            configMapKeyRef:
+              name: hadoop-conf
+              key: HDFS_MASTER_SERVICE
+        volumeMounts:
+        - name: namenode-persistent-storage
+          mountPath: /root/hdfs/namenode
+        - name: datanode-persistent-storage
+          mountPath: /root/hdfs/datanode
+        - name: core-conf
+          mountPath: /tmp/core-site.xml
+          subPath: core-site.xml
+        - name: hdfs-conf
+          mountPath: /tmp/hdfs-site.xml
+          subPath: hdfs-site.xml
+        - name: hive-conf
+          mountPath: /usr/local/hive/conf/hive-site.xml
+          subPath: hive-site.xml
+        - name: sqoop-conf
+          mountPath: /usr/local/sqoop/conf/sqoop-env.sh
+          subPath: spark-env.sh
+        - name: spark-conf
+          mountPath: /tmp/spark/spark-env.sh
+          subPath: spark-env.sh
+        - name: app-home
+          mountPath: /home
+      volumes:
+      - name: namenode-persistent-storage
+        hostPath:
+          path: /usr/local/hadoop/hdfs/namenode
+      - name: datanode-persistent-storage
+        hostPath:
+          path: /usr/local/hadoop/hdfs/datanode
+      - name: core-conf
+        configMap:
+          name: hadoop-conf
+          items:
+          - key: core-site.xml
+            path: core-site.xml
+      - name: hdfs-conf
+        configMap:
+          name: hadoop-conf
+          items:
+          - key: hdfs-site.xml
+            path: hdfs-site.xml
+      - name: hive-conf
+        configMap:
+          name: hadoop-conf
+          items:
+          - key: hive-site.xml
+            path: hive-site.xml
+      - name: sqoop-conf
+        configMap:
+          name: hadoop-conf
+          items:
+          - key: sqoop-env.sh
+            path: sqoop-env.sh
+      - name: spark-conf
+        configMap:
+          name: hadoop-conf
+          items:
+          - key: spark-env.sh
+            path: spark-env.sh
+      - name: app-home
+        hostPath:
+          path: /home/hadoop/app

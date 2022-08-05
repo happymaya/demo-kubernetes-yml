@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hadoop-master
+  namespace: bigdata
+spec:
+  ports:
+  - port: 9000
+    name: rpc
+    protocol: TCP
+    targetPort: 9000
+  - port: 50070
+    name: dfs
+  - port: 8030
+    name: "8030"
+    targetPort: 8030
+  - port: 8031
+    name: "8031"
+    targetPort: 8031
+  - port: 8032
+    name: "8032"
+    targetPort: 8032
+  selector:
+    app: hadoop-master
+  clusterIP: None
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hadoop-svc
+  namespace: bigdata
+spec:
+  type: NodePort
+  ports:
+  - port: 50070
+    name: dfs
+    targetPort: 50070
+    nodePort: 32070
+  - port: 8080
+    name: spark
+    targetPort: 8080
+    nodePort: 32080
+  - port: 4041
+    name: sparkui
+    targetPort: 4041
+    nodePort: 32041
+  selector:
+    app: hadoop-master
